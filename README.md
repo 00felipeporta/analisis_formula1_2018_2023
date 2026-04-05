@@ -2,7 +2,7 @@
 
 Este repositorio contiene un análisis exploratorio de datos (EDA) sobre la **Fórmula 1**, desarrollado íntegramente en **R** y presentado mediante **Quarto**. El objetivo es identificar patrones de fiabilidad, rendimiento de pilotos y el impacto de condiciones climáticas en la competición.
 
-**[VER REPORTE INTERACTIVO AQUÍ](https://github.com/00felipeporta/analisis_formula1_2018_2023)**
+**[VER REPORTE INTERACTIVO AQUÍ](https://00felipeporta.github.io/analisis_formula1_2018_2023/)**
 
 ---
 
