@@ -1,0 +1,178 @@
+---
+title: "Análisis de Datos: Fórmula 1 (2018-2023)"
+subtitle: "Portfolio de Análisis de Datos con R"
+author: "Tu Nombre"
+date: last-modified
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    theme: cosmo
+    self-contained: true
+execute:
+  warning: false
+  message: false
+---
+  
+## Introducción
+  
+  Este informe presenta un análisis exploratorio de datos (EDA) sobre la Fórmula 1, abarcando desde el estado de finalización de las carreras hasta la influencia de factores climáticos en el rendimiento de los vehículos. 
+
+Los datos han sido procesados utilizando el ecosistema `tidyverse` y visualizados con `ggplot2`.
+
+```{r}
+#| label: setup
+#| include: false
+
+# Cargamos las librerías necesarias
+library(tidyverse)
+library(janitor)
+library(knitr)
+
+# Lectura de los archivos necesarios para llevar a cabo el trabajo
+carreras <- read_csv('carreras.csv')
+conductores <- read_csv('conductores.csv')
+constructores <- read_csv('constructores.csv')
+resultados <- read_csv('resultados.csv')
+
+# Limpieza inicial
+carreras <- carreras %>% rename(nombre_carrera = nombre)
+constructores <- constructores %>% rename(equipo = nombre, nac_equipo = nacionalidad)
+```
+
+
+# Análisis del Estado de todos los corredores en todas las carreras
+```{r}
+#| label: fig-estado-general
+#| fig-cap: "Distribución porcentual del estado de finalización de carreras."
+
+resultados_y_conductores <- left_join(resultados, conductores, by="idConductor")
+
+tabla_estado <- resultados_y_conductores %>%
+  count(estado, name= "Frecuencia") %>%
+  mutate(porcentaje = round(Frecuencia / sum(Frecuencia) * 100, 2)) %>%
+  arrange(desc(Frecuencia))
+
+ggplot(data = tabla_estado) +
+  aes(x = reorder(estado, -porcentaje), y = porcentaje, fill = estado) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(breaks = seq(0, 100, by = 10)) +
+  labs(title = "Estado de finalización de carreras", 
+       x = "Estado", 
+       y = "Porcentaje (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+```
+
+# Análisis del estado de finalización del equipo "Mercedes"
+```{r}
+#| label: fig-mercedes
+#| fig-cap: "Análisis de fiabilidad para el equipo Mercedes."
+
+resultados_conductores_constructores <- left_join(resultados_y_conductores, constructores, by="idConstructor")
+
+datos_mercedes <- resultados_conductores_constructores %>%
+  filter(equipo == "Mercedes") 
+
+estado_mercedes <- datos_mercedes %>%
+  count(estado, name= "Frecuencia") %>%
+  mutate(porcentaje = round(Frecuencia / sum(Frecuencia) * 100, 2))
+
+ggplot(data = estado_mercedes) +
+  aes(x = reorder(estado, -porcentaje), y = porcentaje, fill = estado) +
+  geom_bar(stat = "identity") +
+  labs(title = "Estado de carreras: Escudería Mercedes", 
+       x = "Estado de carrera", 
+       y = "Porcentaje (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+```
+
+```{r}
+# Carrera con tiempos de finalización excepcionalmente bajos
+
+#| label: fig-tiempos
+#| fig-cap: "Histograma de tiempos de finalización."
+
+resultados.f <- resultados %>% 
+  filter(!is.na(milisegundos)) %>% 
+  mutate(minutos = milisegundos / 60000)
+
+media_tiempo <- mean(resultados.f$minutos)
+
+ggplot(resultados.f, aes(x = minutos)) +
+  geom_histogram(bins = 35, fill = "steelblue", color = "white") +
+  labs(title = "Distribución de tiempos de finalización (F1 2018-2023)",
+       x = "Tiempo (minutos)",
+       y = "Frecuencia") +
+  theme_minimal() +
+  geom_vline(xintercept = media_tiempo, color = "red", linetype = "dashed") +
+  annotate("text", x = media_tiempo + 10, y = 100, 
+           label = paste("Media:", round(media_tiempo, 1), "min"), color = "red")
+```
+
+
+# Comparacion de podios entre Verstappen, Hamilton y Bottas
+```{r}
+#| label: fig-podios
+#| fig-cap: "Comparativa de podios entre líderes."
+
+resultados_y_conductores.f <- resultados_y_conductores %>% drop_na(codigo, posFinal)
+
+podio <- resultados_y_conductores.f %>%
+  filter(codigo %in% c("VER", "HAM", "BOT"), posFinal %in% c(1, 2, 3)) %>%
+  mutate(posicion_podio = factor(case_when(
+    posFinal == 1 ~ "1° lugar",
+    posFinal == 2 ~ "2° lugar",
+    posFinal == 3 ~ "3° lugar"
+  ), levels = c("3° lugar", "2° lugar", "1° lugar")))
+
+ggplot(podio, aes(x = codigo, fill = posicion_podio)) +
+  geom_bar(position = "stack") +
+  labs(title = "Distribución de podios por piloto",
+       x = "Piloto",
+       y = "Cantidad de Podios",
+       fill = "Posición") +
+  theme_minimal() +
+  scale_fill_manual(values = c("1° lugar" = "#FFD700", 
+                               "2° lugar" = "#C0C0C0", 
+                               "3° lugar" = "#CD7F32"))
+```
+
+
+
+# Cómo afecta la lluvia al desarrollo de la competencia
+```{r}
+#| label: fig-lluvia
+#| fig-cap: "Boxplot de tiempos de carrera bajo lluvia vs. seco."
+
+carreras_y_resultados.f <- left_join(carreras, resultados, by="idCarrera") %>% 
+  drop_na(lluvia, milisegundos)
+
+datos_lluvia <- carreras_y_resultados.f %>% 
+  mutate(Clima = ifelse(lluvia, "Con lluvia", "Sin lluvia"))
+
+ggplot(datos_lluvia, aes(x = Clima, y = milisegundos/60000)) +
+  geom_boxplot(aes(fill = Clima), alpha = 0.7) +
+  labs(title = "Tiempos de finalización según clima",
+       x = "Condición climática",
+       y = "Minutos") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Con lluvia" = "lightblue", "Sin lluvia" = "orange"))
+```
+
+
+# Cómo afecta la temperatura al desarrollo de la competencia
+```{r}
+#| label: fig-temperatura
+#| fig-cap: "Correlación entre temperatura de aire y pista."
+
+ggplot(carreras, aes(x = tempAire, y = tempPista)) +
+  geom_jitter(alpha = 0.4, color = "darkred") +
+  geom_smooth(method = "lm", color = "black", se = FALSE) +
+  labs(title = "Relación: Aire vs. Pista",
+       x = "Temp. Aire (°C)",
+       y = "Temp. Pista (°C)") +
+  theme_minimal()
+```
